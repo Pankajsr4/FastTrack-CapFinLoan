@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"  Version="17.12.0" />
+    <PackageReference Include="xunit"                   Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Moq"                     Version="4.20.72" />
+    <PackageReference Include="FluentAssertions"        Version="6.12.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Application layer only — no infrastructure, no EF, no HTTP -->
+    <ProjectReference Include="..\CapFinLoan.Application.Application\CapFinLoan.Application.Application.csproj" />
+    <ProjectReference Include="..\CapFinLoan.Application.Domain\CapFinLoan.Application.Domain.csproj" />
+    <!-- Shared caching interface (ICacheService) -->
+    <ProjectReference Include="..\..\Shared\CapFinLoan.Api.Shared\CapFinLoan.Api.Shared.csproj" />
+    <!-- Messaging contracts (IEventPublisher, events) -->
+    <ProjectReference Include="..\..\Shared\CapFinLoan.Messaging.Contracts\CapFinLoan.Messaging.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

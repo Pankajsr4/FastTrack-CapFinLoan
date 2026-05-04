@@ -1,0 +1,39 @@
+<Solution>
+  <Folder Name="/AdminService/">
+    <Project Path="AdminService/CapFinLoan.Admin.API/CapFinLoan.Admin.API.csproj" />
+    <Project Path="AdminService/CapFinLoan.Admin.Application/CapFinLoan.Admin.Application.csproj" />
+    <Project Path="AdminService/CapFinLoan.Admin.Domain/CapFinLoan.Admin.Domain.csproj" />
+    <Project Path="AdminService/CapFinLoan.Admin.Infrastructure/CapFinLoan.Admin.Infrastructure.csproj" />
+    <Project Path="AdminService/CapFinLoan.Admin.Persistence/CapFinLoan.Admin.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/ApiGateway/">
+    <Project Path="ApiGateway/CapFinLoan.Gateway.API/CapFinLoan.Gateway.API.csproj" />
+  </Folder>
+  <Folder Name="/ApplicationService/">
+    <Project Path="ApplicationService/CapFinLoan.Application.API/CapFinLoan.Application.API.csproj" />
+    <Project Path="ApplicationService/CapFinLoan.Application.Application/CapFinLoan.Application.Application.csproj" />
+    <Project Path="ApplicationService/CapFinLoan.Application.Domain/CapFinLoan.Application.Domain.csproj" />
+    <Project Path="ApplicationService/CapFinLoan.Application.Infrastructure/CapFinLoan.Application.Infrastructure.csproj" />
+    <Project Path="ApplicationService/CapFinLoan.Application.Persistence/CapFinLoan.Application.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/AuthService/">
+    <Project Path="AuthService/CapFinLoan.Auth.API/CapFinLoan.Auth.API.csproj" />
+    <Project Path="AuthService/CapFinLoan.Auth.Application/CapFinLoan.Auth.Application.csproj" />
+    <Project Path="AuthService/CapFinLoan.Auth.Domain/CapFinLoan.Auth.Domain.csproj" />
+    <Project Path="AuthService/CapFinLoan.Auth.Infrastructure/CapFinLoan.Auth.Infrastructure.csproj" />
+    <Project Path="AuthService/CapFinLoan.Auth.Persistence/CapFinLoan.Auth.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/DocumentService/">
+    <Project Path="DocumentService/CapFinLoan.Document.API/CapFinLoan.Document.API.csproj" />
+    <Project Path="DocumentService/CapFinLoan.Document.Application/CapFinLoan.Document.Application.csproj" />
+    <Project Path="DocumentService/CapFinLoan.Document.Domain/CapFinLoan.Document.Domain.csproj" />
+    <Project Path="DocumentService/CapFinLoan.Document.Infrastructure/CapFinLoan.Document.Infrastructure.csproj" />
+    <Project Path="DocumentService/CapFinLoan.Document.Persistence/CapFinLoan.Document.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/Shared/">
+    <Project Path="Shared/CapFinLoan.Messaging.Contracts/CapFinLoan.Messaging.Contracts.csproj" />
+  </Folder>
+  <Properties Name="Visual Studio">
+    <Property Name="StartupItem" Value="ApiGateway\CapFinLoan.Gateway.API\CapFinLoan.Gateway.API.csproj;AdminService\CapFinLoan.Admin.API\CapFinLoan.Admin.API.csproj;ApplicationService\CapFinLoan.Application.API\CapFinLoan.Application.API.csproj;AuthService\CapFinLoan.Auth.API\CapFinLoan.Auth.API.csproj;DocumentService\CapFinLoan.Document.API\CapFinLoan.Document.API.csproj" />
+  </Properties>
+</Solution>

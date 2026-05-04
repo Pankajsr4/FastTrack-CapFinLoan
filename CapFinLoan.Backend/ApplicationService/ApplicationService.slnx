@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="CapFinLoan.Application.API/CapFinLoan.Application.API.csproj" />
+  <Project Path="CapFinLoan.Application.Application/CapFinLoan.Application.Application.csproj" />
+  <Project Path="CapFinLoan.Application.Domain/CapFinLoan.Application.Domain.csproj" />
+  <Project Path="CapFinLoan.Application.Infrastructure/CapFinLoan.Application.Infrastructure.csproj" />
+  <Project Path="CapFinLoan.Application.Persistence/CapFinLoan.Application.Persistence.csproj" />
+</Solution>

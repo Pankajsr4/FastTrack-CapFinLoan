@@ -1,0 +1,338 @@
+{
+  "info": {
+    "name": "CapFinLoan Backend API",
+    "description": "Complete API test collection for CapFinLoan microservices.\n\nServices:\n- AuthService     :5021\n- ApplicationService :5022\n- DocumentService :5023\n- AdminService    :5024\n\nWorkflow:\n1. Run 'Login' → copy token → set {{token}} variable\n2. Upload a document → copy id → set {{documentId}}\n3. Poll 'Get Document Status' to watch the processing pipeline",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "authBase",      "value": "http://localhost:5021" },
+    { "key": "appBase",       "value": "http://localhost:5022" },
+    { "key": "docBase",       "value": "http://localhost:5023" },
+    { "key": "adminBase",     "value": "http://localhost:5024" },
+    { "key": "token",         "value": "" },
+    { "key": "applicationId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "documentId",    "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth Service",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{authBase}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\":  \"Doe\",\n  \"email\":     \"jane.doe@example.com\",\n  \"password\":  \"SecurePass123!\",\n  \"role\":      \"Applicant\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const json = pm.response.json();",
+                "if (json.token) {",
+                "  pm.collectionVariables.set('token', json.token);",
+                "  console.log('Token saved from signup');",
+                "}"
+              ]
+            }
+          }],
+          "response": [{
+            "name": "200 OK — Account created",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"expiresAt\": \"2026-04-03T10:00:00Z\",\n  \"user\": {\n    \"id\":        \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\n    \"email\":     \"jane.doe@example.com\",\n    \"firstName\": \"Jane\",\n    \"lastName\":  \"Doe\",\n    \"role\":      \"Applicant\"\n  }\n}"
+          }]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{authBase}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\":    \"jane.doe@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const json = pm.response.json();",
+                "if (json.token) {",
+                "  pm.collectionVariables.set('token', json.token);",
+                "  console.log('Token saved:', json.token.substring(0, 30) + '...');",
+                "}",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Token present', () => pm.expect(json.token).to.be.a('string'));"
+              ]
+            }
+          }],
+          "response": [
+            {
+              "name": "200 OK — Login successful",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"expiresAt\": \"2026-04-03T10:00:00Z\",\n  \"user\": {\n    \"id\":    \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\n    \"email\": \"jane.doe@example.com\",\n    \"role\":  \"Applicant\"\n  }\n}"
+            },
+            {
+              "name": "401 Unauthorized — Wrong password",
+              "status": "Unauthorized",
+              "code": 401,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"Invalid email or password.\"]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Document Service",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{docBase}}/api/documents/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "applicationId", "value": "{{applicationId}}", "type": "text" },
+                { "key": "documentType",  "value": "NationalId",        "type": "text" },
+                { "key": "file",          "type": "file",               "src": [] }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const json = pm.response.json();",
+                "if (json.id) {",
+                "  pm.collectionVariables.set('documentId', json.id);",
+                "  console.log('DocumentId saved:', json.id);",
+                "}",
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Status is Pending', () => pm.expect(json.status).to.equal('Pending'));"
+              ]
+            }
+          }],
+          "response": [
+            {
+              "name": "200 OK — Uploaded",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":            \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"applicationId\": \"00000000-0000-0000-0000-000000000001\",\n  \"userId\":        \"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\n  \"fileName\":      \"passport.pdf\",\n  \"contentType\":   \"application/pdf\",\n  \"fileSizeBytes\": 145678,\n  \"documentType\":  \"NationalId\",\n  \"status\":        \"Pending\",\n  \"isVerified\":    false,\n  \"failureReason\": null,\n  \"createdAtUtc\":  \"2026-04-02T10:15:00Z\",\n  \"updatedAtUtc\":  \"2026-04-02T10:15:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Unsupported file type",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"File type is not supported. Allowed types: PDF, JPG, PNG.\"]\n}"
+            },
+            {
+              "name": "400 Bad Request — File too large",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"File size exceeds the maximum allowed size of 5 MB.\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Document Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{docBase}}/api/documents/{{documentId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "pm.test('Has status field', () => pm.expect(json.status).to.be.a('string'));",
+                "console.log('Current status:', json.status);"
+              ]
+            }
+          }],
+          "response": [
+            {
+              "name": "200 OK — Processing",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":            \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"fileName\":      \"passport.pdf\",\n  \"documentType\":  \"NationalId\",\n  \"status\":        \"Processing\",\n  \"isVerified\":    false,\n  \"failureReason\": null,\n  \"createdAtUtc\":  \"2026-04-02T10:15:00Z\",\n  \"updatedAtUtc\":  \"2026-04-02T10:15:22Z\"\n}"
+            },
+            {
+              "name": "200 OK — Completed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":            \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"status\":        \"Completed\",\n  \"updatedAtUtc\":  \"2026-04-02T10:15:45Z\"\n}"
+            },
+            {
+              "name": "200 OK — Failed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":            \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"status\":        \"Failed\",\n  \"failureReason\": \"HttpRequestException: Connection refused\",\n  \"updatedAtUtc\":  \"2026-04-02T10:15:50Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"The requested resource was not found.\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Documents by Application",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{docBase}}/api/documents/application/{{applicationId}}"
+          },
+          "response": [{
+            "name": "200 OK",
+            "status": "OK",
+            "code": 200,
+            "body": "[\n  {\n    \"id\":           \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n    \"fileName\":     \"passport.pdf\",\n    \"documentType\": \"NationalId\",\n    \"status\":       \"Completed\",\n    \"isVerified\":   false,\n    \"createdAtUtc\": \"2026-04-02T10:15:00Z\"\n  },\n  {\n    \"id\":           \"9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d\",\n    \"fileName\":     \"salary-slip.pdf\",\n    \"documentType\": \"ProofOfIncome\",\n    \"status\":       \"Pending\",\n    \"isVerified\":   false,\n    \"createdAtUtc\": \"2026-04-02T10:20:00Z\"\n  }\n]"
+          }]
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{docBase}}/health"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Service healthy', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "pm.test('Status Healthy', () => pm.expect(json.status).to.equal('Healthy'));"
+              ]
+            }
+          }],
+          "response": [
+            {
+              "name": "200 OK — All healthy",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\":   \"Healthy\",\n  \"duration\": \"00:00:00.087\",\n  \"checks\": [\n    { \"name\": \"database\", \"status\": \"Healthy\", \"duration\": \"00:00:00.042\", \"tags\": [\"ready\",\"db\"] },\n    { \"name\": \"rabbitmq\", \"status\": \"Healthy\", \"duration\": \"00:00:00.031\", \"tags\": [\"ready\",\"rabbitmq\"] }\n  ]\n}"
+            },
+            {
+              "name": "503 Service Unavailable — DB down",
+              "status": "Service Unavailable",
+              "code": 503,
+              "body": "{\n  \"status\": \"Unhealthy\",\n  \"checks\": [\n    { \"name\": \"database\", \"status\": \"Unhealthy\", \"description\": \"Cannot open database 'CapFinLoanDb'\" },\n    { \"name\": \"rabbitmq\", \"status\": \"Healthy\" }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Service",
+      "item": [
+        {
+          "name": "Review Application",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{adminBase}}/api/admin/applications/{{applicationId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetStatus\": \"Approved\",\n  \"remarks\":      \"All documents verified. Loan approved.\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Approved",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":                \"00000000-0000-0000-0000-000000000001\",\n  \"applicationNumber\": \"APP-2026-00042\",\n  \"status\":            \"Approved\",\n  \"remarks\":           \"All documents verified. Loan approved.\",\n  \"updatedAtUtc\":      \"2026-04-02T11:00:00Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid status",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"TargetStatus must be one of: Approved, Rejected, UnderReview, PendingDocuments, Disbursed.\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{adminBase}}/api/admin/documents/{{documentId}}/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isVerified\": true,\n  \"remarks\":    \"Document is clear and valid.\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Verified",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":              \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"status\":          \"Verified\",\n  \"isVerified\":      true,\n  \"remarks\":         \"Document is clear and valid.\",\n  \"verifiedByUserId\":\"admin-user-guid\",\n  \"verifiedAtUtc\":   \"2026-04-02T11:05:00Z\",\n  \"updatedAtUtc\":    \"2026-04-02T11:05:00Z\"\n}"
+            },
+            {
+              "name": "200 OK — Rejected",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":          \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"status\":      \"ReuploadRequired\",\n  \"isVerified\":  false,\n  \"remarks\":     \"Photo is blurry. Please re-upload.\",\n  \"updatedAtUtc\":\"2026-04-02T11:06:00Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Internal (Service-to-Service)",
+      "item": [
+        {
+          "name": "Update Document Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{docBase}}/api/internal/documents/{{documentId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Processing\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — Status updated",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\":           \"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\n  \"status\":       \"Processing\",\n  \"updatedAtUtc\": \"2026-04-02T10:15:22Z\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid status",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"Status must be one of: Processing, Completed, UnderReview, Failed.\"]\n}"
+            },
+            {
+              "name": "400 Bad Request — FailureReason missing",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"errors\": [\"FailureReason is required when Status is 'Failed'.\"]\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

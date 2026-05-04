@@ -1,0 +1,322 @@
+name: capfinloan
+
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: capfinloan-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - capfinloan-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: capfinloan-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: capfinloan
+      RABBITMQ_DEFAULT_PASS: capfinloan123
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    networks:
+      - capfinloan-net
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: capfinloan-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "CapFinLoan_SA_2026!"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'CapFinLoan_SA_2026!' -Q 'SELECT 1' -No -C 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - capfinloan-net
+
+  # ── Microservices ─────────────────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: AuthService/Dockerfile
+    container_name: capfinloan-auth
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      ConnectionStrings__CapFinLoanDb: "Server=sqlserver,1433;Database=CapFinLoanAuthDb;User Id=sa;Password=CapFinLoan_SA_2026!;TrustServerCertificate=True"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: capfinloan
+      RabbitMQ__Password: capfinloan123
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  application-service:
+    build:
+      context: .
+      dockerfile: ApplicationService/Dockerfile
+    container_name: capfinloan-application
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      ConnectionStrings__CapFinLoanDb: "Server=sqlserver,1433;Database=CapFinLoanAppDb;User Id=sa;Password=CapFinLoan_SA_2026!;TrustServerCertificate=True"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: capfinloan
+      RabbitMQ__Password: capfinloan123
+      Redis__ConnectionString: "redis:6379"
+      Redis__DefaultExpiryMinutes: "5"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  document-service:
+    build:
+      context: .
+      dockerfile: DocumentService/Dockerfile
+    container_name: capfinloan-document
+    restart: unless-stopped
+    user: root
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      ConnectionStrings__CapFinLoanDb: "Server=sqlserver,1433;Database=CapFinLoanDocDb;User Id=sa;Password=CapFinLoan_SA_2026!;TrustServerCertificate=True"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: capfinloan
+      RabbitMQ__Password: capfinloan123
+    volumes:
+      - document-uploads:/app/wwwroot/uploads
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: AdminService/Dockerfile
+    container_name: capfinloan-admin
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      ConnectionStrings__CapFinLoanDb: "Server=sqlserver,1433;Database=CapFinLoanAdminDb;User Id=sa;Password=CapFinLoan_SA_2026!;TrustServerCertificate=True"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: capfinloan
+      RabbitMQ__Password: capfinloan123
+      DocumentService__BaseUrl: http://document-service:8080
+      AuthService__BaseUrl: http://auth-service:8080
+      ApplicationService__BaseUrl: http://application-service:8080
+      Redis__ConnectionString: "redis:6379"
+      Redis__DefaultExpiryMinutes: "5"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      document-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: NotificationService/Dockerfile
+    container_name: capfinloan-notification
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      ConnectionStrings__CapFinLoanDb: "Server=sqlserver,1433;Database=CapFinLoanNotifDb;User Id=sa;Password=CapFinLoan_SA_2026!;TrustServerCertificate=True"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: capfinloan
+      RabbitMQ__Password: capfinloan123
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/notifications/health > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  ai-assistant-service:
+    build:
+      context: .
+      dockerfile: AiAssistantService/Dockerfile
+    container_name: capfinloan-ai-assistant
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      Gemini__ApiKey: "AIzaSyDlxpW-UxULK1a42wfVkeY5ghlKqyjM4v8"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/ai/health > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - capfinloan-net
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ApiGateway/Dockerfile
+    container_name: capfinloan-gateway
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Jwt__Key: "CapFinLoan.Auth.Jwt.Signing.Key.ChangeThisInProduction.2026"
+      Jwt__Issuer: "CapFinLoan.AuthService"
+      Jwt__Audience: "CapFinLoan.Gateway"
+      OCELOT_CONFIG_PATH: /app/ocelot.Docker.json
+    volumes:
+      - ./ApiGateway/CapFinLoan.Gateway.API/ocelot.Docker.json:/app/ocelot.Docker.json:ro
+    ports:
+      - "5000:8080"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      application-service:
+        condition: service_healthy
+      document-service:
+        condition: service_healthy
+      admin-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - capfinloan-net
+
+  frontend:
+    build:
+      context: ../CapFinLoan.Frontend
+      dockerfile: Dockerfile
+    container_name: capfinloan-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - capfinloan-net
+
+volumes:
+  rabbitmq-data:
+  sqlserver-data:
+  document-uploads:
+
+networks:
+  capfinloan-net:
+    driver: bridge

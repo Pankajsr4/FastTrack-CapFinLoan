@@ -1,0 +1,44 @@
+# ── .NET build outputs ───────────────────────────────────────────────────────
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+**/.vs/
+
+# ── NuGet ─────────────────────────────────────────────────────────────────────
+**/packages/
+*.nupkg
+project.lock.json
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+CapFinLoan.Frontend/node_modules/
+CapFinLoan.Frontend/dist/
+CapFinLoan.Frontend/.vite/
+
+# ── Docker volumes / local data ──────────────────────────────────────────────
+CapFinLoan.Backend/AdminService/CapFinLoan.Admin.API/logs/
+CapFinLoan.Backend/DocumentService/CapFinLoan.Document.API/logs/
+CapFinLoan.Backend/ApplicationService/CapFinLoan.Application.API/logs/
+CapFinLoan.Backend/AuthService/CapFinLoan.Auth.API/logs/
+**/wwwroot/uploads/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+CapFinLoan.Backend/.env
+**/*.env
+**/*.env.local
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+
+# ── Test results ─────────────────────────────────────────────────────────────
+TestResults/
+coverage/
+*.trx

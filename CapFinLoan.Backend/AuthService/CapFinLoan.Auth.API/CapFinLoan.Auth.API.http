@@ -1,0 +1,6 @@
+@CapFinLoan.Auth.API_HostAddress = http://localhost:5025
+
+GET {{CapFinLoan.Auth.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

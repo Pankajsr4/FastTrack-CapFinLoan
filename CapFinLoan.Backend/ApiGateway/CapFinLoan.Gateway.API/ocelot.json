@@ -1,0 +1,80 @@
+{
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/gateway/auth/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/auth/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5021 } ],
+      "SwaggerKey": "auth"
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/applications/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/applications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5022 } ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" },
+      "SwaggerKey": "applications"
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/documents/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/documents/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5023 } ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" },
+      "SwaggerKey": "documents"
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/hubs/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ],
+      "DownstreamPathTemplate": "/hubs/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5023 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/admin/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/admin/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5024 } ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" },
+      "SwaggerKey": "admin"
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/internal/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/internal/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5023 } ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" }
+    }
+  ],
+  "SwaggerEndPoints": [
+    {
+      "Key": "auth",
+      "TransformByOcelotConfig": true,
+      "Config": [ { "Name": "Auth Service",        "Version": "v1", "Url": "http://localhost:5021/swagger/v1/swagger.json" } ]
+    },
+    {
+      "Key": "applications",
+      "TransformByOcelotConfig": true,
+      "Config": [ { "Name": "Application Service", "Version": "v1", "Url": "http://localhost:5022/swagger/v1/swagger.json" } ]
+    },
+    {
+      "Key": "documents",
+      "TransformByOcelotConfig": true,
+      "Config": [ { "Name": "Document Service",    "Version": "v1", "Url": "http://localhost:5023/swagger/v1/swagger.json" } ]
+    },
+    {
+      "Key": "admin",
+      "TransformByOcelotConfig": true,
+      "Config": [ { "Name": "Admin Service",       "Version": "v1", "Url": "http://localhost:5024/swagger/v1/swagger.json" } ]
+    }
+  ],
+  "GlobalConfiguration": {
+    "BaseUrl": "http://localhost:5020",
+    "RequestIdKey": "X-Request-Id"
+  }
+}

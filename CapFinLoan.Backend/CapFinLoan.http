@@ -1,0 +1,595 @@
+### ============================================================
+### CapFinLoan Backend — API Test Requests
+### Compatible with: VS Code REST Client, JetBrains HTTP Client
+###
+### Variables — change these to match your running services
+### ============================================================
+
+@authBase     = http://localhost:5021
+@appBase      = http://localhost:5022
+@docBase      = http://localhost:5023
+@adminBase    = http://localhost:5024
+
+### Paste the token returned by Login below (no "Bearer " prefix)
+@token        = REPLACE_WITH_JWT_TOKEN
+
+### IDs — fill in after creating resources
+@applicationId = 00000000-0000-0000-0000-000000000001
+@documentId    = 00000000-0000-0000-0000-000000000002
+
+
+### ============================================================
+### 1. AUTH SERVICE — User Signup
+### POST /api/auth/register
+### ============================================================
+
+# @name signup
+POST {{authBase}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Jane",
+  "lastName":  "Doe",
+  "email":     "jane.doe@example.com",
+  "password":  "SecurePass123!",
+  "role":      "Applicant"
+}
+
+###
+# Expected 200 response:
+# {
+#   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#   "expiresAt": "2026-04-03T10:00:00Z",
+#   "user": {
+#     "id":        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#     "email":     "jane.doe@example.com",
+#     "firstName": "Jane",
+#     "lastName":  "Doe",
+#     "role":      "Applicant"
+#   }
+# }
+
+
+### ============================================================
+### 2. AUTH SERVICE — User Login
+### POST /api/auth/login
+### ============================================================
+
+# @name login
+POST {{authBase}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email":    "jane.doe@example.com",
+  "password": "SecurePass123!"
+}
+
+###
+# Expected 200 response:
+# {
+#   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#   "expiresAt": "2026-04-03T10:00:00Z",
+#   "user": {
+#     "id":    "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#     "email": "jane.doe@example.com",
+#     "role":  "Applicant"
+#   }
+# }
+#
+# Expected 401 (wrong password):
+# {
+#   "success": false,
+#   "errors": ["Invalid email or password."]
+# }
+
+
+### ============================================================
+### 3. DOCUMENT SERVICE — Upload a document
+### POST /api/documents/upload
+### Content-Type: multipart/form-data
+### ============================================================
+
+# @name uploadDocument
+POST {{docBase}}/api/documents/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----FormBoundary
+
+------FormBoundary
+Content-Disposition: form-data; name="applicationId"
+
+{{applicationId}}
+------FormBoundary
+Content-Disposition: form-data; name="documentType"
+
+NationalId
+------FormBoundary
+Content-Disposition: form-data; name="file"; filename="passport.pdf"
+Content-Type: application/pdf
+
+< ./sample-files/passport.pdf
+------FormBoundary--
+
+###
+# Expected 200 response:
+# {
+#   "id":            "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+#   "applicationId": "00000000-0000-0000-0000-000000000001",
+#   "userId":        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#   "fileName":      "passport.pdf",
+#   "contentType":   "application/pdf",
+#   "fileSizeBytes": 145678,
+#   "documentType":  "NationalId",
+#   "status":        "Pending",
+#   "isVerified":    false,
+#   "failureReason": null,
+#   "createdAtUtc":  "2026-04-02T10:15:00Z",
+#   "updatedAtUtc":  "2026-04-02T10:15:00Z"
+# }
+#
+# Expected 400 (unsupported file type):
+# {
+#   "success": false,
+#   "errors": ["File type is not supported. Allowed types: PDF, JPG, PNG."]
+# }
+#
+# Expected 400 (file too large):
+# {
+#   "success": false,
+#   "errors": ["File size exceeds the maximum allowed size of 5 MB."]
+# }
+
+
+### ============================================================
+### 4. DOCUMENT SERVICE — Get document by ID
+### GET /api/documents/{id}
+### ============================================================
+
+# @name getDocumentById
+GET {{docBase}}/api/documents/{{documentId}}
+Authorization: Bearer {{token}}
+
+###
+# Expected 200 response:
+# {
+#   "id":            "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+#   "applicationId": "00000000-0000-0000-0000-000000000001",
+#   "userId":        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#   "fileName":      "passport.pdf",
+#   "contentType":   "application/pdf",
+#   "fileSizeBytes": 145678,
+#   "documentType":  "NationalId",
+#   "status":        "Processing",
+#   "isVerified":    false,
+#   "failureReason": null,
+#   "createdAtUtc":  "2026-04-02T10:15:00Z",
+#   "updatedAtUtc":  "2026-04-02T10:15:22Z"
+# }
+#
+# Expected 404:
+# {
+#   "success": false,
+#   "errors": ["The requested resource was not found."]
+# }
+
+
+### ============================================================
+### 5. DOCUMENT SERVICE — Get all documents for an application
+### GET /api/documents/application/{applicationId}
+### ============================================================
+
+GET {{docBase}}/api/documents/application/{{applicationId}}
+Authorization: Bearer {{token}}
+
+###
+# Expected 200 response (array):
+# [
+#   {
+#     "id":           "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+#     "fileName":     "passport.pdf",
+#     "documentType": "NationalId",
+#     "status":       "Completed",
+#     "isVerified":   false,
+#     "createdAtUtc": "2026-04-02T10:15:00Z",
+#     "updatedAtUtc": "2026-04-02T10:15:45Z"
+#   },
+#   {
+#     "id":           "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+#     "fileName":     "salary-slip.pdf",
+#     "documentType": "ProofOfIncome",
+#     "status":       "Pending",
+#     "isVerified":   false,
+#     "createdAtUtc": "2026-04-02T10:20:00Z",
+#     "updatedAtUtc": "2026-04-02T10:20:00Z"
+#   }
+# ]
+
+
+### ============================================================
+### 6. DOCUMENT SERVICE — Get my documents (current user)
+### GET /api/documents/my
+### ============================================================
+
+GET {{docBase}}/api/documents/my
+Authorization: Bearer {{token}}
+
+
+### ============================================================
+### 7. DOCUMENT SERVICE — Get document status (polling)
+### GET /api/documents/{id}  — same as #4, used for status polling
+### ============================================================
+
+GET {{docBase}}/api/documents/{{documentId}}
+Authorization: Bearer {{token}}
+
+###
+# Status lifecycle — poll this endpoint every few seconds:
+#
+# t=0s   "status": "Pending"     — uploaded, event published to RabbitMQ
+# t=1s   "status": "Processing"  — consumer picked up the event
+# t=2s   "status": "Completed"   — pipeline finished
+# t=3s   "status": "UnderReview" — queued for admin review
+#
+# Terminal states (stop polling):
+#   "status": "Verified"          — admin approved
+#   "status": "ReuploadRequired"  — admin rejected
+#   "status": "Failed"            — processing error (see failureReason)
+
+
+### ============================================================
+### 8. DOCUMENT SERVICE — Health check
+### GET /health
+### ============================================================
+
+GET {{docBase}}/health
+
+###
+# Expected 200 (all healthy):
+# {
+#   "status":   "Healthy",
+#   "duration": "00:00:00.087",
+#   "checks": [
+#     { "name": "database", "status": "Healthy",   "duration": "00:00:00.042", "tags": ["ready","db"] },
+#     { "name": "rabbitmq", "status": "Healthy",   "duration": "00:00:00.031", "tags": ["ready","rabbitmq"] }
+#   ]
+# }
+#
+# Expected 503 (DB down):
+# {
+#   "status": "Unhealthy",
+#   "checks": [
+#     { "name": "database", "status": "Unhealthy", "description": "Cannot open database..." },
+#     { "name": "rabbitmq", "status": "Healthy" }
+#   ]
+# }
+
+
+### ============================================================
+### 9. ADMIN SERVICE — Review / update application status
+### PUT /api/admin/applications/{id}/status
+### ============================================================
+
+PUT {{adminBase}}/api/admin/applications/{{applicationId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "targetStatus": "Approved",
+  "remarks":      "All documents verified. Loan approved."
+}
+
+###
+# Expected 200 response:
+# {
+#   "id":                "00000000-0000-0000-0000-000000000001",
+#   "applicationNumber": "APP-2026-00042",
+#   "status":            "Approved",
+#   "remarks":           "All documents verified. Loan approved.",
+#   "updatedAtUtc":      "2026-04-02T11:00:00Z"
+# }
+#
+# Expected 400 (invalid status):
+# {
+#   "success": false,
+#   "errors": ["TargetStatus must be one of: Approved, Rejected, UnderReview, PendingDocuments, Disbursed."]
+# }
+
+
+### ============================================================
+### 10. ADMIN SERVICE — Verify a document
+### PUT /api/admin/documents/{id}/verify
+### ============================================================
+
+PUT {{adminBase}}/api/admin/documents/{{documentId}}/verify
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "isVerified": true,
+  "remarks":    "Document is clear and valid."
+}
+
+###
+# Expected 200 response:
+# {
+#   "id":              "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+#   "status":          "Verified",
+#   "isVerified":      true,
+#   "remarks":         "Document is clear and valid.",
+#   "verifiedByUserId":"admin-user-guid",
+#   "verifiedAtUtc":   "2026-04-02T11:05:00Z",
+#   "updatedAtUtc":    "2026-04-02T11:05:00Z"
+# }
+#
+# Reject example:
+# { "isVerified": false, "remarks": "Photo is blurry. Please re-upload." }
+# → "status": "ReuploadRequired"
+
+
+### ============================================================
+### 11. INTERNAL — Update document status (service-to-service)
+### PATCH /api/internal/documents/{id}/status
+### Called by AdminService consumer — no auth required
+### ============================================================
+
+PATCH {{docBase}}/api/internal/documents/{{documentId}}/status
+Content-Type: application/json
+
+{
+  "status": "Processing"
+}
+
+###
+# Other valid values: "Completed", "UnderReview", "Failed"
+#
+# Failed example (failureReason required):
+# { "status": "Failed", "failureReason": "HttpRequestException: Connection refused" }
+#
+# Expected 400 (invalid status):
+# {
+#   "success": false,
+#   "errors": ["Status must be one of: Processing, Completed, UnderReview, Failed."]
+# }
+
+
+### ============================================================
+### FAILURE SCENARIO TESTING
+### Direct RabbitMQ Management API publishes — bypasses the
+### application layer to inject bad messages for testing.
+###
+### Prerequisites:
+###   - RabbitMQ running (docker compose up -d)
+###   - AdminService running (consumer must be attached)
+###   - Watch AdminService logs while sending these requests
+### ============================================================
+
+@rabbitBase  = http://localhost:15672
+@rabbitCreds = capfinloan:capfinloan123
+@mainQueue   = document-uploaded-event
+@dlqQueue    = document-uploaded-event.dlq
+
+
+### ============================================================
+### F1. Malformed JSON → JsonException → NackDiscard → DLQ
+###     Expected: consumer dead-letters immediately, no retries
+### ============================================================
+
+# @name failMalformedJson
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "THIS IS NOT JSON {{{invalid payload",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+###
+# Watch AdminService logs for:
+#   [WARN] [DocumentUploadedEvent] Deserialization failed for delivery ...
+#   [WARN] [DocumentUploadedEvent] Permanent failure — dead-lettering delivery ...
+#
+# Then verify DLQ received it (request F7 below).
+
+
+### ============================================================
+### F2. Empty DocumentId (Guid.Empty) → ArgumentException → DLQ
+###     Expected: Validate() throws → NackDiscard → DLQ
+### ============================================================
+
+# @name failEmptyDocumentId
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"00000000-0000-0000-0000-000000000000\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"test.pdf\",\"contentType\":\"application/pdf\",\"fileSizeBytes\":1024,\"uploadedAtUtc\":\"2026-04-04T10:00:00Z\"}",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+###
+# Watch AdminService logs for:
+#   [ERROR] Processing failed (validation) — DocumentId: 00000000-...: DocumentId must not be empty.
+#   [ERROR] [DocumentUploadedHandler] PERMANENT FAILURE — DocumentId: ... → NackDiscard (DLQ)
+
+
+### ============================================================
+### F3. Unsupported content type → InvalidOperationException → DLQ
+###     Expected: Validate() throws → NackDiscard → DLQ
+### ============================================================
+
+# @name failBadContentType
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"11111111-1111-1111-1111-111111111111\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"malware.exe\",\"contentType\":\"application/x-msdownload\",\"fileSizeBytes\":2048,\"uploadedAtUtc\":\"2026-04-04T10:00:00Z\"}",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+###
+# Watch AdminService logs for:
+#   [ERROR] Processing failed (validation) — Unsupported content type 'application/x-msdownload'
+
+
+### ============================================================
+### F4. File too large → InvalidOperationException → DLQ
+###     fileSizeBytes = 10 MB (limit is 5 MB)
+### ============================================================
+
+# @name failFileTooLarge
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"22222222-2222-2222-2222-222222222222\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"huge.pdf\",\"contentType\":\"application/pdf\",\"fileSizeBytes\":10485760,\"uploadedAtUtc\":\"2026-04-04T10:00:00Z\"}",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+
+### ============================================================
+### F5. Pre-exhausted retries (x-retry-count = MaxDeliveryCount)
+###     Expected: consumer dead-letters BEFORE calling handler
+### ============================================================
+
+# @name failPreExhaustedRetries
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"33333333-3333-3333-3333-333333333333\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"exhausted.pdf\",\"contentType\":\"application/pdf\",\"fileSizeBytes\":1024,\"uploadedAtUtc\":\"2026-04-04T10:00:00Z\"}",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {
+      "x-retry-count": 3
+    }
+  }
+}
+
+###
+# Watch AdminService logs for:
+#   [WARN] [DocumentUploadedEvent] Max retries exceeded (3/3) for delivery ... → dead-lettering
+
+
+### ============================================================
+### F6. Transient failure — non-existent DocumentId
+###     DocumentService returns 404 → HttpRequestException → retry
+###     After MaxDeliveryCount retries → DLQ
+###     NOTE: This requires AdminService + DocumentService both running
+### ============================================================
+
+# @name failTransientNonExistentDoc
+POST {{rabbitBase}}/api/exchanges/%2F//publish
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "routing_key": "{{mainQueue}}",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"ffffffff-ffff-ffff-ffff-ffffffffffff\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"nonexistent.pdf\",\"contentType\":\"application/pdf\",\"fileSizeBytes\":1024,\"uploadedAtUtc\":\"2026-04-04T10:00:00Z\"}",
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+###
+# Watch AdminService logs for retry progression:
+#   [INFO]  Processing started — DocumentId: ffffffff-...
+#   [ERROR] Processing failed — HttpRequestException: DocumentService status update to 'Processing' failed (404)
+#   [INFO]  [DocumentUploadedHandler] TRANSIENT FAILURE → NackRequeue (retry)
+#   ... (repeats with x-retry-count = 1, 2, 3)
+#   [WARN]  Max retries exceeded (3/3) → dead-lettering
+
+
+### ============================================================
+### F7. Check DLQ message count
+### ============================================================
+
+# @name checkDlqCount
+GET {{rabbitBase}}/api/queues/%2F/{{dlqQueue}}
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+
+###
+# Expected response includes:
+# {
+#   "name": "document-uploaded-event.dlq",
+#   "messages": 5,          ← one per failure scenario above
+#   "durable": true,
+#   "message_stats": { "publish": 5 }
+# }
+
+
+### ============================================================
+### F8. Peek DLQ messages (non-destructive)
+### ============================================================
+
+# @name peekDlqMessages
+POST {{rabbitBase}}/api/queues/%2F/{{dlqQueue}}/get
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+Content-Type: application/json
+
+{
+  "count": 10,
+  "ackmode": "ack_requeue_true",
+  "encoding": "auto"
+}
+
+###
+# Each message in the response will have:
+# {
+#   "payload": "...",
+#   "properties": {
+#     "headers": {
+#       "x-retry-count": 3,          ← for transient failures
+#       "x-death": [{ "reason": "rejected", "queue": "document-uploaded-event", ... }]
+#     }
+#   }
+# }
+#
+# x-death is added by RabbitMQ broker when dead-lettering.
+# x-retry-count is our custom header tracking retry attempts.
+
+
+### ============================================================
+### F9. Purge DLQ (cleanup after testing)
+###     WARNING: destroys all DLQ messages — use only in dev/test
+### ============================================================
+
+# @name purgeDlq
+DELETE {{rabbitBase}}/api/queues/%2F/{{dlqQueue}}/contents
+Authorization: Basic Y2FwZmlubG9hbjpjYXBmaW5sb2FuMTIz
+
+###
+# Returns 204 No Content on success.
+# Use this to reset DLQ state between test runs.

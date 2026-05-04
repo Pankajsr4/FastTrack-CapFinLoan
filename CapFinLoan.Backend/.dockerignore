@@ -1,0 +1,15 @@
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/*.user
+**/*.suo
+**/logs
+**/node_modules
+**/.git
+**/.gitignore
+**/README.md
+**/scripts
+**/sample-files
+**/*.http
+**/*.postman_collection.json

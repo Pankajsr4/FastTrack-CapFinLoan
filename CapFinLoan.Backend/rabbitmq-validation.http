@@ -1,0 +1,320 @@
+### ============================================================
+### RabbitMQ Validation — Management API Requests
+### Uses the RabbitMQ HTTP Management API (port 15672)
+### Credentials: capfinloan / capfinloan123
+### ============================================================
+
+@mgmt     = http://localhost:15672/api
+@vhost    = %2F
+@user     = capfinloan
+@pass     = capfinloan123
+@queue    = document-uploaded-event
+@dlq      = document-uploaded-event.dlq
+@exchange = document-uploaded-event.dlx
+
+
+### ============================================================
+### STEP 1 — Verify connection is established
+### GET /api/overview
+### ============================================================
+
+# @name overview
+GET {{mgmt}}/overview
+Authorization: Basic capfinloan:capfinloan123
+
+###
+# Expected: 200 with broker info
+# Look for: "object_totals.connections" > 0
+# {
+#   "rabbitmq_version": "3.x.x",
+#   "object_totals": {
+#     "connections": 3,   ← one per service (DocumentService, AdminService, ApplicationService)
+#     "channels":    6,
+#     "queues":      9,
+#     "exchanges":   12
+#   },
+#   "message_stats": { ... }
+# }
+
+
+### ============================================================
+### STEP 2 — List all connections
+### GET /api/connections
+### ============================================================
+
+GET {{mgmt}}/connections
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected: array of connection objects
+# Each service should appear with state: "running"
+# [
+#   { "name": "127.0.0.1:...", "state": "running", "client_properties": { "connection_name": "..." } },
+#   ...
+# ]
+
+
+### ============================================================
+### STEP 3 — Verify queue was created (durable)
+### GET /api/queues/{vhost}/{queue}
+### ============================================================
+
+# @name checkQueue
+GET {{mgmt}}/queues/{{vhost}}/{{queue}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected 200:
+# {
+#   "name":       "document-uploaded-event",
+#   "durable":    true,          ← must be true
+#   "auto_delete":false,
+#   "arguments": {
+#     "x-dead-letter-exchange":    "document-uploaded-event.dlx",
+#     "x-dead-letter-routing-key": "",
+#     "x-message-ttl":             1800000
+#   },
+#   "messages":          0,      ← 0 when idle
+#   "messages_ready":    0,
+#   "messages_unacked":  0,
+#   "consumers":         1       ← AdminService consumer is attached
+# }
+#
+# Expected 404 if queue doesn't exist yet:
+# { "error": "Object Not Found", "reason": "Not Found" }
+# → Start AdminService to trigger queue declaration
+
+
+### ============================================================
+### STEP 4 — Verify DLQ and DLX were created
+### ============================================================
+
+# Dead-letter exchange
+GET {{mgmt}}/exchanges/{{vhost}}/{{exchange}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected:
+# {
+#   "name":       "document-uploaded-event.dlx",
+#   "type":       "fanout",    ← must be fanout
+#   "durable":    true,
+#   "auto_delete":false
+# }
+
+###
+
+# Dead-letter queue
+GET {{mgmt}}/queues/{{vhost}}/{{dlq}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected:
+# {
+#   "name":    "document-uploaded-event.dlq",
+#   "durable": true,
+#   "arguments": { "x-message-ttl": 604800000 },
+#   "messages": 0   ← 0 when no failures have occurred
+# }
+
+
+### ============================================================
+### STEP 5 — Publish a test message directly via Management API
+### POST /api/exchanges/{vhost}/{exchange}/publish
+### ============================================================
+
+POST {{mgmt}}/exchanges/{{vhost}}//publish
+Authorization: Basic {{user}}:{{pass}}
+Content-Type: application/json
+
+{
+  "routing_key": "document-uploaded-event",
+  "payload_encoding": "string",
+  "payload": "{\"documentId\":\"7c9e6679-7425-40de-944b-e07fc1f90ae7\",\"applicationId\":\"00000000-0000-0000-0000-000000000001\",\"userId\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"documentType\":\"NationalId\",\"fileName\":\"test.pdf\",\"contentType\":\"application/pdf\",\"fileSizeBytes\":12345,\"uploadedAtUtc\":\"2026-04-02T10:00:00Z\"}",
+  "properties": {
+    "content_type":   "application/json",
+    "delivery_mode":  2,
+    "headers": {}
+  }
+}
+
+###
+# Expected: { "routed": true }
+# Then check queue message count increases:
+# GET {{mgmt}}/queues/{{vhost}}/{{queue}}
+# → "messages_ready": 1
+
+
+### ============================================================
+### STEP 6 — Check message count after publish
+### ============================================================
+
+GET {{mgmt}}/queues/{{vhost}}/{{queue}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# If AdminService is running: messages_ready should be 0 (consumed immediately)
+# If AdminService is stopped: messages_ready should be 1 (waiting)
+
+
+### ============================================================
+### STEP 7 — Peek at a message without consuming it
+### POST /api/queues/{vhost}/{queue}/get
+### ============================================================
+
+POST {{mgmt}}/queues/{{vhost}}/{{queue}}/get
+Authorization: Basic {{user}}:{{pass}}
+Content-Type: application/json
+
+{
+  "count":    1,
+  "ackmode":  "ack_requeue_true",
+  "encoding": "auto",
+  "truncate": 50000
+}
+
+###
+# Expected (message waiting):
+# [
+#   {
+#     "payload_bytes": 312,
+#     "redelivered":   false,
+#     "exchange":      "",
+#     "routing_key":   "document-uploaded-event",
+#     "message_count": 0,
+#     "properties": {
+#       "content_type":  "application/json",
+#       "delivery_mode": 2,
+#       "headers": { "x-retry-count": 0 }
+#     },
+#     "payload": "{\"documentId\":\"7c9e6679...\",\"status\":\"Pending\",...}"
+#   }
+# ]
+#
+# Expected (queue empty — message was consumed):
+# []
+
+
+### ============================================================
+### STEP 8 — Verify message was consumed (check consumer count)
+### ============================================================
+
+GET {{mgmt}}/queues/{{vhost}}/{{queue}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Look for:
+# "consumers": 1          ← AdminService consumer attached
+# "messages_ready": 0     ← consumed
+# "messages_unacked": 0   ← acked (not in-flight)
+#
+# Also check message_stats.deliver_get for total delivered count
+
+
+### ============================================================
+### STEP 9 — Trigger DLQ behavior
+### Stop AdminService, publish 4 messages (exceeds MaxDeliveryCount=3)
+### Then restart AdminService and watch messages go to DLQ
+### ============================================================
+
+# First: stop AdminService
+# Then publish a message with an invalid payload (will fail deserialization)
+POST {{mgmt}}/exchanges/{{vhost}}//publish
+Authorization: Basic {{user}}:{{pass}}
+Content-Type: application/json
+
+{
+  "routing_key": "document-uploaded-event",
+  "payload_encoding": "string",
+  "payload": "THIS IS NOT VALID JSON — will cause deserialization failure",
+  "properties": {
+    "content_type":  "application/json",
+    "delivery_mode": 2,
+    "headers": {}
+  }
+}
+
+###
+# After restarting AdminService:
+# 1. Consumer receives the message
+# 2. JSON deserialization fails → permanent failure
+# 3. BasicNack(requeue: false) → message routed to DLX → DLQ
+#
+# Verify DLQ received the message:
+
+GET {{mgmt}}/queues/{{vhost}}/{{dlq}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected: "messages": 1  (the failed message is now in DLQ)
+
+
+### ============================================================
+### STEP 10 — Inspect DLQ message
+### ============================================================
+
+POST {{mgmt}}/queues/{{vhost}}/{{dlq}}/get
+Authorization: Basic {{user}}:{{pass}}
+Content-Type: application/json
+
+{
+  "count":    1,
+  "ackmode":  "ack_requeue_true",
+  "encoding": "auto"
+}
+
+###
+# Expected: message with x-death header showing why it was dead-lettered
+# {
+#   "payload": "THIS IS NOT VALID JSON...",
+#   "properties": {
+#     "headers": {
+#       "x-death": [{
+#         "count":      1,
+#         "reason":     "rejected",
+#         "queue":      "document-uploaded-event",
+#         "time":       "2026-04-02T10:15:00Z",
+#         "exchange":   "document-uploaded-event.dlx",
+#         "routing-keys": [""]
+#       }]
+#     }
+#   }
+# }
+
+
+### ============================================================
+### STEP 11 — List all queues (full overview)
+### ============================================================
+
+GET {{mgmt}}/queues/{{vhost}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Expected: all 9 queues (3 per service × 3 services):
+# document-uploaded-event          + .dlq
+# document-verified-event          + .dlq
+# application-status-changed-event + .dlq
+# application-submitted-event      + .dlq
+# user-registered-event            + .dlq
+# ...
+
+
+### ============================================================
+### STEP 12 — Check message rates (throughput)
+### ============================================================
+
+GET {{mgmt}}/queues/{{vhost}}/{{queue}}
+Authorization: Basic {{user}}:{{pass}}
+
+###
+# Look at message_stats:
+# {
+#   "message_stats": {
+#     "publish":          5,    ← total published
+#     "publish_details":  { "rate": 0.0 },
+#     "deliver_get":      5,    ← total delivered
+#     "ack":              5,    ← total acked (successful)
+#     "deliver_no_ack":   0,
+#     "redeliver":        0     ← 0 = no retries needed
+#   }
+# }

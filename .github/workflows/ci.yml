@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "20"
+
+jobs:
+  # ── Backend: Restore → Build → Test ────────────────────────────────────────
+  backend:
+    name: Backend (Build & Test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: CapFinLoan.Backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore CapFinLoan.Backend.slnx
+
+      - name: Build
+        run: dotnet build CapFinLoan.Backend.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: |
+          dotnet test CapFinLoan.Backend.slnx \
+            --no-build \
+            --configuration Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: CapFinLoan.Backend/TestResults/*.trx
+
+  # ── Frontend: Install → Test → Build ───────────────────────────────────────
+  frontend:
+    name: Frontend (Build & Test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: CapFinLoan.Frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: CapFinLoan.Frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: CapFinLoan.Frontend/dist
+
+  # ── Docker: Build all service images ───────────────────────────────────────
+  docker:
+    name: Docker (Build Images)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    defaults:
+      run:
+        working-directory: CapFinLoan.Backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build auth-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/AuthService/Dockerfile
+          push: false
+          tags: capfinloan/auth-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build application-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/ApplicationService/Dockerfile
+          push: false
+          tags: capfinloan/application-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build document-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/DocumentService/Dockerfile
+          push: false
+          tags: capfinloan/document-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build admin-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/AdminService/Dockerfile
+          push: false
+          tags: capfinloan/admin-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build api-gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/ApiGateway/Dockerfile
+          push: false
+          tags: capfinloan/api-gateway:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build notification-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/NotificationService/Dockerfile
+          push: false
+          tags: capfinloan/notification-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build ai-assistant-service
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Backend
+          file: CapFinLoan.Backend/AiAssistantService/Dockerfile
+          push: false
+          tags: capfinloan/ai-assistant-service:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: CapFinLoan.Frontend
+          file: CapFinLoan.Frontend/Dockerfile
+          push: false
+          tags: capfinloan/frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
