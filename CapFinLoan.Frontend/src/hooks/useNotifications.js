@@ -46,6 +46,8 @@ export function useNotifications() {
   // ── SignalR real-time connection ──────────────────────────────────────────
   useEffect(() => {
     if (!user?.sub || !token) return;
+    // Guard: only connect if token looks like a real JWT
+    if (!token.startsWith('eyJ') || token.split('.').length !== 3) return;
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`${HUB_URL}?access_token=${token}`)

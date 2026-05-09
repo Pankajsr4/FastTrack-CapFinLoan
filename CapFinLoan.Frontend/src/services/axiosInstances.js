@@ -11,7 +11,10 @@ function createInstance(baseURL) {
   // Attach JWT from localStorage on every request
   instance.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    // Only attach if it looks like a real JWT (three Base64Url parts separated by dots)
+    if (token && token.startsWith('eyJ') && token.split('.').length === 3) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   });
 
