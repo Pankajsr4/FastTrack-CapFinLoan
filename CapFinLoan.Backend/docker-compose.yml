@@ -112,6 +112,7 @@ services:
       RabbitMQ__Port: "5672"
       RabbitMQ__Username: capfinloan
       RabbitMQ__Password: capfinloan123
+      RabbitMQ__QueueSuffix: "app-svc"
       Redis__ConnectionString: "redis:6379"
       Redis__DefaultExpiryMinutes: "5"
     depends_on:
@@ -148,6 +149,7 @@ services:
       RabbitMQ__Port: "5672"
       RabbitMQ__Username: capfinloan
       RabbitMQ__Password: capfinloan123
+      RabbitMQ__QueueSuffix: "doc-svc"
     volumes:
       - document-uploads:/app/wwwroot/uploads
     depends_on:
@@ -181,6 +183,7 @@ services:
       RabbitMQ__Port: "5672"
       RabbitMQ__Username: capfinloan
       RabbitMQ__Password: capfinloan123
+      RabbitMQ__QueueSuffix: "admin-svc"
       DocumentService__BaseUrl: http://document-service:8080
       AuthService__BaseUrl: http://auth-service:8080
       ApplicationService__BaseUrl: http://application-service:8080
@@ -221,6 +224,7 @@ services:
       RabbitMQ__Port: "5672"
       RabbitMQ__Username: capfinloan
       RabbitMQ__Password: capfinloan123
+      RabbitMQ__QueueSuffix: "notif-svc"
     depends_on:
       sqlserver:
         condition: service_healthy

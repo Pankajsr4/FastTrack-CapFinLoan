@@ -32,6 +32,15 @@ public sealed class RabbitMQSettings
     public ConsumerSettings Consumer { get; init; } = new();
 
     /// <summary>
+    /// Optional suffix appended to queue names for this service instance.
+    /// Use this to give each microservice its own dedicated queue when multiple
+    /// services consume the same event type (fan-out pattern).
+    /// Example: "app-service" → "application-status-changed-event.app-service"
+    /// Leave empty (default) to use the shared queue name.
+    /// </summary>
+    public string QueueSuffix { get; init; } = string.Empty;
+
+    /// <summary>
     /// How long (seconds) RabbitMQ's built-in automatic recovery waits between
     /// reconnect attempts after an established connection drops.
     /// </summary>

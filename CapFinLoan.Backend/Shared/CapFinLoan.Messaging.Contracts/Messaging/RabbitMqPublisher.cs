@@ -9,13 +9,22 @@ using RabbitMQ.Client.Exceptions;
 namespace CapFinLoan.Messaging.Contracts.Messaging;
 
 /// <summary>
-/// Production-grade RabbitMQ publisher using RabbitMQ.Client directly.
-/// Durable queues, persistent messages, DLQ routing, publish retry with exponential backoff.
+/// Publishes messages to a per-event-type fanout exchange.
+/// Each consuming service binds its own durable queue to the exchange,
+/// so every service receives every message independently (fan-out pattern).
+///
+/// Exchange naming: kebab-case of the event type name
+///   ApplicationStatusChangedEvent → application-status-changed-event (exchange)
+///
+/// Queue naming (consumer side): {exchange}.{QueueSuffix}
+///   application-status-changed-event.app-svc
+///   application-status-changed-event.doc-svc
+///   application-status-changed-event.notif-svc
 /// </summary>
 public sealed class RabbitMqPublisher
 {
-    private readonly RabbitMqConnectionFactory _connectionFactory;
-    private readonly RabbitMQSettings          _settings;
+    private readonly RabbitMqConnectionFactory  _connectionFactory;
+    private readonly RabbitMQSettings           _settings;
     private readonly ILogger<RabbitMqPublisher> _logger;
     private static readonly Random Jitter = new();
 
@@ -35,8 +44,12 @@ public sealed class RabbitMqPublisher
         _logger            = logger;
     }
 
+    /// <summary>
+    /// Publishes <paramref name="message"/> to the fanout exchange for event type <typeparamref name="T"/>.
+    /// The exchange name is derived from the type name (kebab-case).
+    /// </summary>
     public async Task PublishAsync<T>(
-        string queueName,
+        string queueName,          // kept for backward-compat; used as exchange name
         T message,
         CancellationToken cancellationToken = default) where T : class
     {
@@ -47,16 +60,16 @@ public sealed class RabbitMqPublisher
         var body = Encoding.UTF8.GetBytes(json);
 
         _logger.LogDebug(
-            "Publishing {EventType} → queue '{Queue}' ({Bytes} bytes)",
+            "Publishing {EventType} → exchange '{Exchange}' ({Bytes} bytes)",
             typeof(T).Name, queueName, body.Length);
 
         await PublishWithRetryAsync(queueName, typeof(T).Name, body, cancellationToken);
     }
 
-    // -------------------------------------------------------------------------
+    // ── Retry loop ────────────────────────────────────────────────────────────
 
     private async Task PublishWithRetryAsync(
-        string queueName,
+        string exchangeName,
         string eventTypeName,
         byte[] body,
         CancellationToken ct)
@@ -67,37 +80,27 @@ public sealed class RabbitMqPublisher
         {
             try
             {
-                await PublishOnceAsync(queueName, eventTypeName, body, ct);
+                await PublishOnceAsync(exchangeName, eventTypeName, body, ct);
                 return;
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
+            catch (OperationCanceledException) { throw; }
             catch (AlreadyClosedException ex) when (attempt < retry.MaxAttempts)
-            {
-                await DelayAndLog(ex, attempt, retry, queueName, ct);
-            }
+                { await DelayAndLog(ex, attempt, retry, exchangeName, ct); }
             catch (ChannelAllocationException ex) when (attempt < retry.MaxAttempts)
-            {
-                await DelayAndLog(ex, attempt, retry, queueName, ct);
-            }
+                { await DelayAndLog(ex, attempt, retry, exchangeName, ct); }
             catch (Exception ex) when (attempt < retry.MaxAttempts)
-            {
-                await DelayAndLog(ex, attempt, retry, queueName, ct);
-            }
+                { await DelayAndLog(ex, attempt, retry, exchangeName, ct); }
         }
 
-        // Final attempt — let exception propagate
         _logger.LogError(
-            "All {Max} publish attempts failed for queue '{Queue}'. Giving up.",
-            retry.MaxAttempts, queueName);
+            "All {Max} publish attempts failed for exchange '{Exchange}'. Giving up.",
+            retry.MaxAttempts, exchangeName);
 
-        await PublishOnceAsync(queueName, eventTypeName, body, ct);
+        await PublishOnceAsync(exchangeName, eventTypeName, body, ct);
     }
 
     private async Task PublishOnceAsync(
-        string queueName,
+        string exchangeName,
         string eventTypeName,
         byte[] body,
         CancellationToken ct)
@@ -105,39 +108,14 @@ public sealed class RabbitMqPublisher
         var connection = await _connectionFactory.GetConnectionAsync(ct);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: ct);
 
-        var dlxName = $"{queueName}.dlx";
-        var dlqName = $"{queueName}.dlq";
-
-        // Dead-letter exchange
+        // Declare the fanout exchange — idempotent, safe to call on every publish
         await channel.ExchangeDeclareAsync(
-            exchange: dlxName, type: ExchangeType.Fanout,
-            durable: true, autoDelete: false, cancellationToken: ct);
-
-        // Dead-letter queue — declare with same TTL as consumer to avoid PRECONDITION_FAILED
-        var dlqArgs = new Dictionary<string, object?> { ["x-message-ttl"] = 604_800_000 };
-        await channel.QueueDeclareAsync(
-            queue: dlqName, durable: true, exclusive: false,
-            autoDelete: false, arguments: dlqArgs, cancellationToken: ct);
-
-        await channel.QueueBindAsync(
-            queue: dlqName, exchange: dlxName,
-            routingKey: string.Empty, cancellationToken: ct);
-
-        // Main durable queue with DLX routing — declare with same TTL as consumer to avoid PRECONDITION_FAILED
-        await channel.QueueDeclareAsync(
-            queue:      queueName,
+            exchange:   exchangeName,
+            type:       ExchangeType.Fanout,
             durable:    true,
-            exclusive:  false,
             autoDelete: false,
-            arguments:  new Dictionary<string, object?>
-            {
-                ["x-dead-letter-exchange"]    = dlxName,
-                ["x-dead-letter-routing-key"] = string.Empty,  // matches consumer declaration
-                ["x-message-ttl"]             = 1_800_000,     // 30 min — matches ConsumerSettings.MessageTtlMs default
-            },
             cancellationToken: ct);
 
-        // Message properties — persistent, JSON, with tracing headers
         var props = new BasicProperties
         {
             ContentType     = "application/json",
@@ -153,27 +131,28 @@ public sealed class RabbitMqPublisher
             },
         };
 
+        // Publish to the fanout exchange — routingKey is ignored by fanout
         await channel.BasicPublishAsync(
-            exchange:        string.Empty,
-            routingKey:      queueName,
+            exchange:        exchangeName,
+            routingKey:      string.Empty,
             mandatory:       false,
             basicProperties: props,
             body:            body,
             cancellationToken: ct);
 
         _logger.LogInformation(
-            "Published {EventType} → queue '{Queue}' | msgId={MessageId} | {Bytes} bytes",
-            eventTypeName, queueName, props.MessageId, body.Length);
+            "Published {EventType} → exchange '{Exchange}' | msgId={MessageId} | {Bytes} bytes",
+            eventTypeName, exchangeName, props.MessageId, body.Length);
     }
 
     private async Task DelayAndLog(
         Exception ex, int attempt, RetrySettings retry,
-        string queue, CancellationToken ct)
+        string exchange, CancellationToken ct)
     {
         var delay = ComputeDelay(attempt, retry);
         _logger.LogWarning(ex,
-            "Publish to '{Queue}' failed (attempt {Attempt}/{Max}). Retrying in {Delay:F1}s...",
-            queue, attempt, retry.MaxAttempts, delay.TotalSeconds);
+            "Publish to '{Exchange}' failed (attempt {Attempt}/{Max}). Retrying in {Delay:F1}s...",
+            exchange, attempt, retry.MaxAttempts, delay.TotalSeconds);
         await Task.Delay(delay, ct);
     }
 

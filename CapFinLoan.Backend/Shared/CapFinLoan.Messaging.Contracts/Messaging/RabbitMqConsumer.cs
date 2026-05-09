@@ -55,6 +55,7 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
     private readonly RabbitMqConnectionFactory    _connectionFactory;
     private readonly IServiceScopeFactory         _scopeFactory;
     private readonly ConsumerSettings             _consumer;
+    private readonly string                       _queueSuffix;
     private readonly ILogger<RabbitMqConsumer<T>> _logger;
 
     private volatile int _inFlightCount;
@@ -74,6 +75,7 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
         _connectionFactory = connectionFactory;
         _scopeFactory      = scopeFactory;
         _consumer          = settings.Value.Consumer;
+        _queueSuffix       = settings.Value.QueueSuffix ?? string.Empty;
         _logger            = logger;
     }
 
@@ -85,7 +87,9 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
         base.Dispose();
     }
 
-    private static string QueueName => ToQueueName(typeof(T).Name);
+    private string QueueName => string.IsNullOrEmpty(_queueSuffix)
+        ? ToQueueName(typeof(T).Name)
+        : $"{ToQueueName(typeof(T).Name)}.{_queueSuffix}";
 
     // =========================================================================
     // BackgroundService entry point
@@ -294,13 +298,23 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
 
     private async Task DeclareTopologyAsync(IChannel channel, CancellationToken ct)
     {
-        var dlxName = $"{QueueName}.dlx";
-        var dlqName = $"{QueueName}.dlq";
+        // The exchange name is the base event name (no suffix) — shared by all services
+        var exchangeName = ToQueueName(typeof(T).Name);
+        var queueName    = QueueName;   // suffixed: e.g. application-status-changed-event.app-svc
+        var dlxName      = $"{queueName}.dlx";
+        var dlqName      = $"{queueName}.dlq";
+
+        // ── Fanout exchange ───────────────────────────────────────────────────
+        // Declared by both publisher and consumer (idempotent).
+        // All services bind their own queue to this exchange.
+        await channel.ExchangeDeclareAsync(
+            exchange:   exchangeName,
+            type:       ExchangeType.Fanout,
+            durable:    true,
+            autoDelete: false,
+            cancellationToken: ct);
 
         // ── Dead-letter exchange ──────────────────────────────────────────────
-        // Fanout type: routes every dead-lettered message to all bound queues.
-        // Only the DLQ is bound, so all dead letters land there.
-        // Durable: survives broker restart.
         await channel.ExchangeDeclareAsync(
             exchange:   dlxName,
             type:       ExchangeType.Fanout,
@@ -309,10 +323,6 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
             cancellationToken: ct);
 
         // ── Dead-letter queue ─────────────────────────────────────────────────
-        // Receives messages that are:
-        //   - Nacked with requeue=false (permanent failure, max retries exceeded)
-        //   - Expired on the main queue (x-message-ttl elapsed)
-        // DlqMessageTtlMs prevents unbounded growth (default 7 days).
         var dlqArgs = new Dictionary<string, object?>();
         if (_consumer.DlqMessageTtlMs > 0)
             dlqArgs["x-message-ttl"] = _consumer.DlqMessageTtlMs;
@@ -325,7 +335,6 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
             arguments:  dlqArgs.Count > 0 ? dlqArgs : null,
             cancellationToken: ct);
 
-        // Bind DLQ to DLX — empty routing key works for fanout exchanges.
         await channel.QueueBindAsync(
             queue:      dlqName,
             exchange:   dlxName,
@@ -333,12 +342,6 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
             cancellationToken: ct);
 
         // ── Main queue ────────────────────────────────────────────────────────
-        // x-dead-letter-exchange: routes nacked/expired messages to the DLX.
-        // x-dead-letter-routing-key: explicit empty string — DLX is fanout so
-        //   the routing key is unused, but setting it explicitly prevents
-        //   the original routing key from being forwarded (cleaner semantics).
-        // x-message-ttl: messages not consumed within this window are dead-lettered
-        //   automatically by the broker (default 30 min).
         var queueArgs = new Dictionary<string, object?>
         {
             ["x-dead-letter-exchange"]     = dlxName,
@@ -348,19 +351,27 @@ public sealed partial class RabbitMqConsumer<T> : BackgroundService where T : cl
             queueArgs["x-message-ttl"] = _consumer.MessageTtlMs;
 
         await channel.QueueDeclareAsync(
-            queue:      QueueName,
+            queue:      queueName,
             durable:    true,
             exclusive:  false,
             autoDelete: false,
             arguments:  queueArgs,
             cancellationToken: ct);
 
-        // ── Log declared topology ─────────────────────────────────────────────
+        // ── Bind this service's queue to the fanout exchange ──────────────────
+        // routingKey is ignored by fanout — every bound queue gets every message
+        await channel.QueueBindAsync(
+            queue:      queueName,
+            exchange:   exchangeName,
+            routingKey: string.Empty,
+            cancellationToken: ct);
+
         _logger.LogInformation(
             "[{Consumer}] Topology declared — " +
-            "queue: '{Queue}' (ttl={TtlMs}ms) → dlx: '{Dlx}' → dlq: '{Dlq}' (ttl={DlqTtlMs}ms)",
+            "exchange: '{Exchange}' → queue: '{Queue}' (ttl={TtlMs}ms) → dlx: '{Dlx}' → dlq: '{Dlq}' (ttl={DlqTtlMs}ms)",
             typeof(T).Name,
-            QueueName,  _consumer.MessageTtlMs,
+            exchangeName,
+            queueName,  _consumer.MessageTtlMs,
             dlxName,
             dlqName,    _consumer.DlqMessageTtlMs);
     }
