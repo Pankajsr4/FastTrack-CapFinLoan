@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../services/authService';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -8,6 +9,9 @@ export default function SignupPage() {
   });
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
+
+  const { saveToken } = useAuthContext();
+  const navigate      = useNavigate();
 
   const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
 
@@ -37,14 +41,13 @@ export default function SignupPage() {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role',  (data.role || '').toUpperCase());
+      saveToken(data.token, data.role);
 
       const dest = (data.role || '').toUpperCase() === 'ADMIN'
         ? '/admin/dashboard'
         : '/applicant/dashboard';
 
-      window.location.href = dest;
+      navigate(dest, { replace: true });
 
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Registration failed.';

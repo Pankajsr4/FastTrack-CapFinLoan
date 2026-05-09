@@ -54,6 +54,17 @@ try
                         ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                         ctx.Token = token;
                     return Task.CompletedTask;
+                },
+                OnAuthenticationFailed = ctx =>
+                {
+                    Log.Warning("[JWT] Authentication failed: {Error}", ctx.Exception.Message);
+                    return Task.CompletedTask;
+                },
+                OnChallenge = ctx =>
+                {
+                    Log.Warning("[JWT] Challenge issued — error: {Error}, description: {Desc}",
+                        ctx.Error, ctx.ErrorDescription);
+                    return Task.CompletedTask;
                 }
             };
         });

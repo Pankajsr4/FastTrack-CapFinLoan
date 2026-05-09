@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { login as loginService } from '../services/authService';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function LoginPage() {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+
+  const { saveToken } = useAuthContext();
+  const navigate      = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,14 +27,14 @@ export default function LoginPage() {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role',  (data.role || '').toUpperCase());
+      // Save via AuthContext so all hooks (useNotifications etc.) pick it up
+      saveToken(data.token, data.role);
 
       const dest = (data.role || '').toUpperCase() === 'ADMIN'
         ? '/admin/dashboard'
         : '/applicant/dashboard';
 
-      window.location.href = dest;
+      navigate(dest, { replace: true });
 
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Login failed.';
