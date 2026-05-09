@@ -27,6 +27,13 @@
       "SwaggerKey": "documents"
     },
     {
+      "UpstreamPathTemplate": "/gateway/hubs/notifications/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ],
+      "DownstreamPathTemplate": "/hubs/notifications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
       "UpstreamPathTemplate": "/gateway/hubs/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ],
       "DownstreamPathTemplate": "/hubs/{everything}",
@@ -49,13 +56,6 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ],
       "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" }
-    },
-    {
-      "UpstreamPathTemplate": "/gateway/hubs/notifications/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ],
-      "DownstreamPathTemplate": "/hubs/notifications/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
     },
     {
       "UpstreamPathTemplate": "/gateway/ai/{everything}",

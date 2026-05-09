@@ -62,7 +62,14 @@ try
     builder.Services.AddControllers();
     builder.Services.AddSignalR();
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+        p.WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:5000",
+                "http://frontend:80")
+         .AllowAnyHeader()
+         .AllowAnyMethod()
+         .AllowCredentials()));
 
     // ── Infrastructure (DB + RabbitMQ + SignalR pusher + notification service) ─
     builder.Services.AddInfrastructure(builder.Configuration);

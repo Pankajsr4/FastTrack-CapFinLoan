@@ -38,7 +38,7 @@ public sealed class NotificationService : INotificationService
 
         var record = new NotificationRecord
         {
-            UserId            = applicantUserId,
+            UserId            = applicantUserId,   // ← correct user
             ApplicationNumber = applicationNumber,
             Type              = "Submitted",
             Title             = title,
@@ -49,19 +49,20 @@ public sealed class NotificationService : INotificationService
     }
 
     public async Task SendApplicationApprovedAsync(
-        Guid applicationId, string applicationNumber,
+        Guid applicationId, Guid applicantUserId,
+        string applicationNumber,
         string applicantName, string email,
         decimal amount, CancellationToken ct = default)
     {
         var title   = $"Application {applicationNumber} Approved 🎉";
-        var message = $"Congratulations! Your loan application for ₹{amount:N0} has been approved.";
+        var message = $"Congratulations! Your loan application has been approved.";
 
         _logger.LogInformation("[NOTIFICATION] Approved | {Ref} | {Name}", applicationNumber, applicantName);
         SimulateEmail(email, $"[CapFinLoan] {title}", $"Dear {applicantName},\n\n{message}\n\nOur team will contact you shortly.");
 
         var record = new NotificationRecord
         {
-            UserId            = applicationId,
+            UserId            = applicantUserId,   // ← correct user
             ApplicationNumber = applicationNumber,
             Type              = "Approved",
             Title             = title,
@@ -72,7 +73,8 @@ public sealed class NotificationService : INotificationService
     }
 
     public async Task SendApplicationRejectedAsync(
-        Guid applicationId, string applicationNumber,
+        Guid applicationId, Guid applicantUserId,
+        string applicationNumber,
         string applicantName, string email,
         string remarks, CancellationToken ct = default)
     {
@@ -84,7 +86,7 @@ public sealed class NotificationService : INotificationService
 
         var record = new NotificationRecord
         {
-            UserId            = applicationId,
+            UserId            = applicantUserId,   // ← correct user
             ApplicationNumber = applicationNumber,
             Type              = "Rejected",
             Title             = title,
@@ -95,7 +97,8 @@ public sealed class NotificationService : INotificationService
     }
 
     public async Task SendApplicationUpdatedAsync(
-        Guid applicationId, string applicationNumber,
+        Guid applicationId, Guid applicantUserId,
+        string applicationNumber,
         string previousStatus, string newStatus,
         string remarks, CancellationToken ct = default)
     {
@@ -103,11 +106,11 @@ public sealed class NotificationService : INotificationService
         var message = $"Status changed from '{previousStatus}' to '{newStatus}'. {remarks}".Trim();
 
         _logger.LogInformation("[NOTIFICATION] Updated | {Ref} | {From} → {To}", applicationNumber, previousStatus, newStatus);
-        SimulateEmail($"applicant-{applicationId}@capfinloan.internal", $"[CapFinLoan] {title}", message);
+        SimulateEmail($"applicant-{applicantUserId}@capfinloan.internal", $"[CapFinLoan] {title}", message);
 
         var record = new NotificationRecord
         {
-            UserId            = applicationId,
+            UserId            = applicantUserId,   // ← correct user
             ApplicationNumber = applicationNumber,
             Type              = "Updated",
             Title             = title,

@@ -5,10 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace CapFinLoan.Notification.Infrastructure.Messaging;
 
-/// <summary>
-/// Handles ApplicationStatusChangedEvent and routes to the appropriate
-/// notification based on the new status (Approved / Rejected / other).
-/// </summary>
 public sealed class ApplicationStatusChangedHandler : IMessageHandler<ApplicationStatusChangedEvent>
 {
     private const string Approved = "Approved";
@@ -37,19 +33,21 @@ public sealed class ApplicationStatusChangedHandler : IMessageHandler<Applicatio
         {
             await _notifications.SendApplicationApprovedAsync(
                 message.ApplicationId,
+                message.ApplicantUserId,                          // ← now carried in event
                 message.ApplicationNumber,
-                applicantName: $"Applicant ({message.ApplicationId})",
-                email: $"applicant-{message.ApplicationId}@capfinloan.internal",
-                amount: 0,   // amount not carried in this event; extend if needed
+                applicantName: $"Applicant ({message.ApplicantUserId})",
+                email: $"applicant-{message.ApplicantUserId}@capfinloan.internal",
+                amount: 0,
                 cancellationToken);
         }
         else if (string.Equals(message.NewStatus, Rejected, StringComparison.OrdinalIgnoreCase))
         {
             await _notifications.SendApplicationRejectedAsync(
                 message.ApplicationId,
+                message.ApplicantUserId,                          // ← now carried in event
                 message.ApplicationNumber,
-                applicantName: $"Applicant ({message.ApplicationId})",
-                email: $"applicant-{message.ApplicationId}@capfinloan.internal",
+                applicantName: $"Applicant ({message.ApplicantUserId})",
+                email: $"applicant-{message.ApplicantUserId}@capfinloan.internal",
                 remarks: message.Remarks,
                 cancellationToken);
         }
@@ -57,6 +55,7 @@ public sealed class ApplicationStatusChangedHandler : IMessageHandler<Applicatio
         {
             await _notifications.SendApplicationUpdatedAsync(
                 message.ApplicationId,
+                message.ApplicantUserId,                          // ← now carried in event
                 message.ApplicationNumber,
                 message.PreviousStatus,
                 message.NewStatus,

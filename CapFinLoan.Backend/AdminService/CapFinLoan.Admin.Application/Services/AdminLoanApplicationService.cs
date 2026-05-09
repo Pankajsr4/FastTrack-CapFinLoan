@@ -204,13 +204,14 @@ public class AdminLoanApplicationService : IAdminLoanApplicationService
 
         await _eventPublisher.PublishAsync(new ApplicationStatusChangedEvent
         {
-            ApplicationId    = application.Id,
+            ApplicationId     = application.Id,
+            ApplicantUserId   = application.ApplicantUserId,   // ← notify the right user
             ApplicationNumber = application.ApplicationNumber,
-            PreviousStatus   = previousStatus,
-            NewStatus        = ApplicationStatuses.Disbursed,
-            Remarks          = $"Loan disbursed. Amount: {disbursedAmount:F2}",
-            ChangedByUserId  = adminUserId,
-            ChangedAtUtc     = now
+            PreviousStatus    = previousStatus,
+            NewStatus         = ApplicationStatuses.Disbursed,
+            Remarks           = $"Loan disbursed. Amount: {disbursedAmount:F2}",
+            ChangedByUserId   = adminUserId,
+            ChangedAtUtc      = now
         }, cancellationToken);
 
         return MapDetail(application);
@@ -260,13 +261,14 @@ public class AdminLoanApplicationService : IAdminLoanApplicationService
 
         await _eventPublisher.PublishAsync(new ApplicationStatusChangedEvent
         {
-            ApplicationId = application.Id,
+            ApplicationId     = application.Id,
+            ApplicantUserId   = application.ApplicantUserId,   // ← notify the right user
             ApplicationNumber = application.ApplicationNumber,
-            PreviousStatus = previousStatus,
-            NewStatus = targetStatus,
-            Remarks = request.Remarks.Trim(),
-            ChangedByUserId = reviewerUserId,
-            ChangedAtUtc = now
+            PreviousStatus    = previousStatus,
+            NewStatus         = targetStatus,
+            Remarks           = request.Remarks.Trim(),
+            ChangedByUserId   = reviewerUserId,
+            ChangedAtUtc      = now
         }, cancellationToken);
 
         return MapDetail(application);
