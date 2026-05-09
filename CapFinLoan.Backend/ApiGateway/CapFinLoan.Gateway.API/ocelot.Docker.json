@@ -54,8 +54,7 @@
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ],
       "DownstreamPathTemplate": "/api/notifications/{everything}",
       "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ],
-      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer" }
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
     },
     {
       "UpstreamPathTemplate": "/gateway/ai/{everything}",
